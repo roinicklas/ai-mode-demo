@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Mode</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;600;700&family=Rubik:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --indigo: #26235c;
+    --indigo-soft: #eeedf6;
+    --text: #1f2937;
+    --muted: #6b7280;
+    --line: rgba(145, 158, 171, 0.32);
+    --bg: #f3f4f6;
+    --brand: #a3a9b4;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { background: var(--bg); color: var(--text); font-family: Assistant, Rubik, Arial, sans-serif; }
+  iframe { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; background: #fff; }
+  #fallback {
+    position: fixed; top: 28px; left: 28px; z-index: 5;
+    border: 1px solid var(--indigo); background: #fff; color: var(--indigo);
+    border-radius: 999px; padding: 8px 14px; font-family: Rubik, Assistant, sans-serif;
+    font-weight: 500; cursor: pointer; display: none;
+  }
+  #chat, #cart-wrap { position: fixed; inset: 0; display: none; }
+  #chat { z-index: 20; }
+  #cart-wrap { z-index: 30; }
+  #chat.on { display: flex; }
+  #cart-wrap.on { display: block; }
+  #chat { background: #f7f7f8; flex-direction: column; }
+  .stage { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 560px; }
+  #offer-list .pcard.active .shot { box-shadow: 0 0 0 3px var(--indigo); }
+  #offer-list .pcard.active h3 { color: var(--indigo); font-weight: 500; }
+  .talk { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+  #offers {
+    min-height: 0; overflow: auto; background: #fff;
+    border-inline-start: 1px solid var(--line);
+    padding: 20px 20px 28px; display: flex; flex-direction: column; gap: 14px;
+  }
+  #offers h2 { margin: 0; color: var(--indigo); font-size: 16px; font-weight: 700; }
+  #offers .hint { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+  #offer-list { display: flex; flex-direction: column; gap: 10px; }
+  #offer-list .pcard {
+    display: grid;
+    grid-template-columns: 108px minmax(0, 1fr);
+    column-gap: 12px;
+    align-items: center;
+    padding: 8px;
+    border-radius: 16px;
+    background: #f7f7f8;
+  }
+  #offer-list .shot {
+    grid-row: 1 / span 3;
+    width: 108px;
+    height: 108px;
+    aspect-ratio: auto;
+    border-radius: 12px;
+  }
+  #offer-list .qv-btn { display: none; }
+  #offer-list .pop { top: 6px; right: 6px; height: 18px; font-size: 10px; }
+  #offer-list .pcard .row1 { grid-column: 2; grid-row: 1; margin-top: 0; }
+  #offer-list .pcard h3 {
+    grid-column: 2; grid-row: 2; height: auto; margin: 2px 0 0;
+    font-size: 13px; line-height: 18px;
+  }
+  #offer-list .note { grid-column: 2; grid-row: 3; margin: 4px 0 0; font-size: 12px; }
+  #offer-list .price { font-size: 16px; line-height: 22px; }
+  .top {
+    height: 64px; display: flex; align-items: center; justify-content: space-between;
+    padding: 0 20px; background: #fff; border-bottom: 1px solid var(--line);
+  }
+  .top b { color: var(--indigo); font-weight: 600; }
+  .top span { color: var(--muted); font-size: 13px; }
+  .back, .x, .qv-x {
+    border: 0; background: transparent; cursor: pointer; color: var(--text);
+    font: inherit; padding: 8px 4px;
+  }
+  #thread {
+    flex: 1; min-height: 0; width: min(720px, calc(100% - 48px));
+    margin: 0 auto; overflow: auto; padding: 28px 0 12px;
+    display: flex; flex-direction: column; gap: 18px;
+  }
+  .ai { font-size: 16px; line-height: 1.65; }
+  .user {
+    align-self: flex-end; max-width: 80%;
+    background: var(--indigo); color: #fff; border-radius: 18px 18px 4px 18px;
+    padding: 10px 14px; line-height: 1.5;
+  }
+  .read {
+    align-self: stretch; color: var(--muted); font-size: 13px;
+    background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px;
+  }
+  .cmp { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .pcard { display: flex; flex-direction: column; min-width: 0; }
+  .shot {
+    position: relative; aspect-ratio: 1; border-radius: 16px; overflow: hidden; background: var(--bg); cursor: pointer;
+  }
+  .shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .pop {
+    position: absolute; top: 12px; right: 12px; height: 24px; display: inline-flex; align-items: center;
+    padding: 0 6px; border-radius: 6px; background: #38b2ac; color: #fff;
+    font-family: Rubik, sans-serif; font-size: 12px; font-weight: 700;
+  }
+  .qv-btn {
+    position: absolute; left: 16px; right: 16px; bottom: 16px;
+    height: 44px; border: 0; border-radius: 12px; cursor: pointer;
+    background: var(--indigo); color: #fff; font: inherit; font-weight: 600;
+  }
+  .pcard .row1 {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px;
+  }
+  .brand {
+    font-family: Rubik, sans-serif; font-size: 12px; font-weight: 500;
+    letter-spacing: 0.04em; text-transform: uppercase; color: var(--brand);
+  }
+  .price {
+    font-family: Rubik, sans-serif; font-weight: 700; font-size: 18px; line-height: 28px;
+  }
+  .pcard h3 {
+    margin: 8px 0 0; height: 44px; overflow: hidden;
+    font-family: Rubik, sans-serif; font-weight: 300; font-size: 14px; line-height: 22px;
+  }
+  .note { margin: 6px 0 0; color: var(--muted); font-size: 13px; }
+  .pcard.over .note { color: #b45353; }
+  .typing { color: var(--muted); font-size: 14px; }
+  #composer {
+    position: static; height: auto; padding: 8px 24px 20px;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    background: linear-gradient(#f7f7f8, #fff);
+  }
+  #composer input {
+    width: min(640px, calc(100% - 120px)); height: 46px; border-radius: 999px;
+    border: 1px solid var(--line); padding: 0 16px; font: inherit; background: #fff;
+  }
+  #composer input.live { border-color: var(--indigo); }
+  #composer button {
+    border: 1px solid var(--line); background: #fff; color: var(--text);
+    border-radius: 999px; padding: 8px 14px; font: inherit;
+  }
+  #cart-wrap { background: transparent; }
+  #cart-wrap .shade { position: absolute; inset: 0; background: rgba(17, 24, 39, 0.28); }
+  aside.cart {
+    position: absolute; top: 0; bottom: 0; left: 0; width: min(420px, 100%);
+    background: #fff; display: flex; flex-direction: column;
+    box-shadow: 0 8px 16px rgba(38, 35, 92, 0.24);
+    font-family: Rubik, Assistant, sans-serif;
+  }
+  aside.cart header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 16px 17px; border-bottom: 1px solid #f0f0f0;
+  }
+  .title { display: flex; align-items: center; gap: 8px; font-weight: 500; }
+  .count {
+    min-width: 22px; height: 22px; border-radius: 999px; background: var(--indigo); color: #fff;
+    display: inline-flex; align-items: center; justify-content: center; font-size: 12px;
+  }
+  .cart-row {
+    margin: 16px; display: flex; gap: 12px; background: var(--bg); border-radius: 16px; padding: 8px;
+  }
+  .cart-row img { width: 96px; height: 96px; object-fit: cover; border-radius: 12px; }
+  .cart-row .info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+  .cart-row p { margin: 0; font-weight: 300; line-height: 24px; text-align: start; }
+  .cart-row .meta { color: #6b7280; }
+  .ai-tag {
+    align-self: flex-start; display: inline-flex; align-items: center; height: 24px;
+    padding: 0 8px; border-radius: 6px; background: var(--indigo); color: #fff;
+    font-family: Rubik, sans-serif; font-size: 12px; font-weight: 700; white-space: nowrap;
+    direction: rtl; unicode-bidi: isolate;
+  }
+  footer.bal { margin-top: auto; padding: 16px; border-top: 1px solid #f0f0f0; display: grid; gap: 8px; }
+  footer.bal div { display: flex; justify-content: space-between; gap: 12px; font-weight: 300; white-space: nowrap; }
+  footer.bal .left { color: var(--indigo); font-weight: 500; }
+
+  #qv { position: fixed; inset: 0; z-index: 40; display: none; }
+  #qv.on { display: flex; align-items: center; justify-content: center; padding: 16px; }
+  #qv .scrim { position: absolute; inset: 0; background: rgba(0,0,0,.4); backdrop-filter: blur(2px); }
+  .panel {
+    position: relative; z-index: 1; width: min(968px, 100%); max-height: calc(100dvh - 32px);
+    overflow: auto; background: #fff; border-radius: 16px;
+    box-shadow: -40px 40px 80px -8px rgba(0,0,0,.24);
+    display: flex; flex-direction: column;
+  }
+  .qv-head { display: flex; align-items: center; gap: 16px; padding: 24px; }
+  .qv-head h2 {
+    margin: 0; flex: 1; min-width: 0;
+    font-family: Rubik, sans-serif; font-weight: 700; font-size: 20px; line-height: 30px;
+  }
+  .ai-tag span { unicode-bidi: isolate; }
+  .qv-body { display: flex; gap: 24px; padding: 0 24px 24px; align-items: flex-start; direction: ltr; }
+  .qv-photo { width: min(392px, 42%); flex: none; }
+  .qv-photo img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 14px; background: var(--bg); display: block; }
+  .qv-brand { margin-top: 12px; font-family: Rubik, sans-serif; font-weight: 700; font-size: 18px; text-align: left; }
+  .qv-info { flex: 1; min-width: 0; direction: rtl; text-align: right; display: flex; flex-direction: column; gap: 16px; }
+  .qv-info p { margin: 0; line-height: 1.6; color: var(--muted); }
+  .qv-foot {
+    display: flex; justify-content: flex-end; gap: 12px;
+    padding: 16px 24px 24px; border-top: 1px solid #f0f0f0;
+  }
+  .soft, .ghost {
+    height: 44px; padding: 0 18px; border-radius: 12px; cursor: pointer; font: inherit; font-weight: 600;
+  }
+  .soft { border: 0; background: var(--indigo-soft); color: var(--indigo); }
+  .ghost { border: 1px solid var(--line); background: #fff; color: var(--text); }
+  .scene {
+    align-self: center; font-size: 12px; font-weight: 600; color: var(--indigo);
+    background: var(--indigo-soft); border-radius: 999px; padding: 4px 12px;
+  }
+  .ask-note { margin: 4px 16px 0; color: var(--muted); font-size: 13px; }
+  #ask-cart {
+    margin: 8px 16px 0; height: 44px; border: 0; border-radius: 12px;
+    background: var(--indigo); color: #fff; font: inherit; font-weight: 600; cursor: pointer;
+  }
+  #ask-cart.pulse { box-shadow: 0 0 0 6px rgba(38, 35, 92, 0.28); }
+  #ask-cart.pressed { transform: scale(0.96); }
+</style>
+</head>
+<body>
+<iframe id="site" title="האתר" src="iframe.html?id=homepage-homepage--hebrew-desktop&viewMode=story"></iframe>
+<button id="fallback" type="button">AI Mode</button>
+
+<section id="chat" aria-label="מצב שיחה">
+  <div class="top">
+    <button class="back" type="button" id="back">חזרה לאתר</button>
+    <b>AI Mode · מצב שיחה</b>
+    <span>השיחה לחוד, ההצעות לחוד</span>
+  </div>
+  <div class="stage">
+    <div class="talk">
+      <div id="thread"></div>
+      <form id="composer">
+        <input id="box" placeholder="או כתבי כאן…" autocomplete="off">
+        <button type="submit" tabindex="-1">שליחה</button>
+      </form>
+    </div>
+    <aside id="offers" aria-label="ההצעות">
+      <h2>ההצעות</h2>
+      <p class="hint" id="offers-empty">הכרטיסים נשארים כאן, ולא זזים עם השיחה.</p>
+      <div id="offer-list"></div>
+    </aside>
+  </div>
+</section>
+
+<div id="cart-wrap">
+  <div class="shade" id="shade"></div>
+  <aside class="cart">
+    <header>
+      <button class="x" type="button" id="close-cart">✕</button>
+      <div class="title"><span class="count">1</span><span>העגלה</span></div>
+    </header>
+    <div id="cart-items"></div>
+    <p class="ask-note" id="ask-note" hidden>השאלה נפתחת על המוצרים שכאן, בלי להקליד שמות.</p>
+    <button id="ask-cart" type="button" hidden>שאלי על מה שבעגלה</button>
+    <footer class="bal">
+      <div><span>סה״כ קרדיט</span><span>1,000₪</span></div>
+      <div><span>נוצל עכשיו</span><span id="used-amt">900₪</span></div>
+      <div class="left"><span>נותר</span><span id="left-amt">100₪</span></div>
+    </footer>
+  </aside>
+</div>
+
+<div id="qv" role="dialog" aria-modal="true">
+  <div class="scrim" id="qv-scrim"></div>
+  <div class="panel">
+    <div class="qv-head">
+      <h2 id="qv-title"></h2>
+      <button class="qv-x" type="button" id="qv-close">✕</button>
+    </div>
+    <div class="qv-body">
+      <div class="qv-photo">
+        <img id="qv-img" alt="">
+        <div class="qv-brand" id="qv-brand"></div>
+      </div>
+      <div class="qv-info">
+        <div class="price" id="qv-price"></div>
+        <p id="qv-detail"></p>
+      </div>
+    </div>
+    <div class="qv-foot">
+      <button class="ghost" type="button" id="qv-dismiss">סגירה</button>
+      <button class="soft" type="button" id="qv-add">הוסף לעגלה</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const site = document.getElementById('site');
+const chat = document.getElementById('chat');
+const thread = document.getElementById('thread');
+const cartWrap = document.getElementById('cart-wrap');
+const fallback = document.getElementById('fallback');
+const box = document.getElementById('box');
+
+const products = {
+  headphones: {
+    name: 'אוזניות Bluetooth פרימיום עם ביטול רעשים אקטיבי',
+    brand: 'TECHBRAND',
+    price: '200₪',
+    image: 'ai-products/headphones.jpg',
+    popular: true,
+    ok: true,
+    note: 'בתוך היתרה · נשארים 100₪',
+    detail: 'ביטול רעשים אקטיבי, נוחות ליום שלם בדרך ובשיחות. 200₪, ובתוך היתרה שנשארה.'
+  },
+  watch: {
+    name: 'שעון חכם Pro עם ניטור בריאות',
+    brand: 'TECHBRAND',
+    price: '380₪',
+    image: 'ai-products/watch.jpg',
+    ok: false,
+    note: 'חורג ב-80₪ מהיתרה',
+    detail: 'ניטור דופק ושינה. 380₪, וזה 80₪ מעל 300₪ שנשארו.'
+  },
+  lamp: {
+    name: 'מנורת שולחן מינימליסטית עם טעינת USB',
+    brand: 'TECHBRAND',
+    price: '170₪',
+    image: 'ai-products/lamp.jpg',
+    ok: true,
+    note: 'פינת עבודה · נשארים 130₪',
+    detail: 'אור רך לשולחן העבודה, ושקע טעינה. 170₪, ונשארים 130₪.'
+  },
+  glasses: {
+    name: 'משקפי שמש מעצב — הגנה UV400',
+    brand: 'TECHBRAND',
+    price: '150₪',
+    image: 'ai-products/glasses.jpg',
+    ok: true,
+    note: 'בתוך היתרה · נשארים 150₪',
+    detail: 'הגנה UV400. 150₪, המוצר הזול מבין השלושה שבעגלה.'
+  }
+};
+
+const beats = [
+  { ai: 'עברת למצב שיחה. אני על אותו אתר, עם אותה יתרה: נשארו לך 300₪ מתוך 1,000₪. במה את מתלבטת?' },
+  { user: 'אני מתלבטת בין האוזניות לשעון' },
+  { read: 'קוראת מהקטלוג את אוזניות Bluetooth ואת שעון חכם Pro' },
+  { cards: ['headphones', 'watch'] },
+  { ai: 'שתיהן מהקטלוג שעל המסך. השעון 380₪, וזה 80₪ מעל מה שנשאר. האוזניות 200₪, ואחריהן נשארים 100₪. אפשר לפתוח צפייה מהירה על כל כרטיס.' },
+  { user: 'השעון מושך, אבל לא בא לי לשלם תוספת' },
+  { read: 'מסננת את הקטלוג למוצרים עד 300₪' },
+  { ai: 'אז השעון יוצא. בתוך מה שנשאר שווה לשים מול האוזניות גם את מנורת השולחן, 170₪.' },
+  { user: 'תשווי את האוזניות למנורה' },
+  { cards: ['headphones', 'lamp'] },
+  { ai: 'שתיהן בתוך היתרה. האוזניות יוצאות מהבית כל יום. המנורה נשארת על השולחן, ועולה 30₪ פחות.' },
+  { user: 'מה היית בוחרת במקומי?' },
+  { ai: 'הייתי נשארת עם האוזניות. הן בתוך היתרה, ומשאירות 100₪ אם אחר כך יתחשק להוסיף עוד משהו.' },
+  { user: 'אוזניות. תוסיפי לעגלה' },
+  { read: 'מוסיפה לעגלה · אוזניות Bluetooth פרימיום · 200₪' },
+  { ai: 'נוסף, עם תגית שזה הגיע מ-AI Mode. נשארו 100₪ מתוך 1,000₪. פותחת את העגלה.' },
+  { cart: 'headphones' }
+];
+
+let cursor = 0;
+let started = false;
+let stopped = false;
+let paused = false;
+
+function wait(ms) { return new Promise((r) => setTimeout(r, ms)); }
+async function gate() {
+  while (paused && !stopped) await wait(120);
+}
+function scroll() { thread.scrollTop = thread.scrollHeight; }
+
+function add(html, cls) {
+  const el = document.createElement('div');
+  el.className = cls;
+  el.innerHTML = html;
+  thread.appendChild(el);
+  scroll();
+  return el;
+}
+
+function cardHtml(id) {
+  const p = products[id];
+  return '<article class="pcard ' + (p.ok ? 'ok' : 'over') + '" data-id="' + id + '">' +
+    '<div class="shot">' +
+      '<img alt="" src="' + p.image + '">' +
+      (p.popular ? '<span class="pop">פופולרי</span>' : '') +
+      '<button type="button" class="qv-btn">צפייה מהירה</button>' +
+    '</div>' +
+    '<div class="row1"><span class="brand">' + p.brand + '</span><span class="price">' + p.price + '</span></div>' +
+    '<h3>' + p.name + '</h3>' +
+    '<p class="note">' + p.note + '</p>' +
+  '</article>';
+}
+
+function bindCards(boxEl) {
+  boxEl.querySelectorAll('.pcard').forEach((card) => {
+    const open = (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      openQuickView(card.dataset.id);
+    };
+    card.querySelector('.shot').onclick = open;
+    card.querySelector('.qv-btn').onclick = open;
+  });
+}
+
+function openQuickView(id) {
+  const p = products[id];
+  if (!p) return;
+  paused = true;
+  document.getElementById('qv-title').textContent = p.name;
+  document.getElementById('qv-img').src = p.image;
+  document.getElementById('qv-brand').textContent = p.brand;
+  document.getElementById('qv-price').textContent = p.price;
+  document.getElementById('qv-detail').textContent = p.detail;
+  document.getElementById('qv').classList.add('on');
+  document.getElementById('qv-add').onclick = () => {
+    closeQuickView();
+    showCart(id);
+  };
+}
+
+function closeQuickView() {
+  document.getElementById('qv').classList.remove('on');
+  paused = false;
+}
+
+function rowHtml(id) {
+  const p = products[id];
+  const tag = id === 'headphones'
+    ? '<span class="ai-tag">נוסף על ידי <span dir="ltr">AI Mode</span></span>'
+    : '';
+  return '<div class="cart-row"><img alt="" src="' + p.image + '"><div class="info">' +
+    tag + '<p>' + p.name + '</p><p class="meta">' + p.price + '</p></div></div>';
+}
+
+function fillCart(ids, withAsk) {
+  document.getElementById('cart-items').innerHTML = ids.map(rowHtml).join('');
+  document.querySelector('#cart-wrap .count').textContent = String(ids.length);
+  document.getElementById('ask-cart').hidden = !withAsk;
+  document.getElementById('ask-note').hidden = !withAsk;
+  const sum = ids.reduce((n, id) => n + parseInt(products[id].price, 10), 0);
+  if (withAsk) {
+    document.getElementById('used-amt').textContent = sum.toLocaleString('en-US') + '₪';
+    document.getElementById('left-amt').textContent = (1000 - sum).toLocaleString('en-US') + '₪';
+  }
+  cartWrap.classList.add('on');
+}
+
+function showCart(id) {
+  fillCart([id], false);
+  stopped = true;
+}
+
+async function typeAndSend(text) {
+  box.value = '';
+  box.classList.add('live');
+  for (const ch of text) {
+    await gate();
+    if (stopped) return;
+    box.value += ch;
+    await wait(80);
+  }
+  await wait(1100);
+  await gate();
+  if (stopped) return;
+  box.value = '';
+  box.classList.remove('live');
+  add(text, 'user');
+  highlightTalk(text);
+}
+
+async function run() {
+  while (cursor < beats.length) {
+    await gate();
+    if (stopped) return;
+    const beat = beats[cursor++];
+    if (beat.user) {
+      await typeAndSend(beat.user);
+      continue;
+    }
+    const typing = add('כותבת…', 'typing');
+    await wait(beat.read ? 1200 : 1600);
+    await gate();
+    typing.remove();
+    if (stopped) return;
+    if (beat.ai) {
+      add(beat.ai, 'ai');
+      highlightTalk(beat.ai);
+    }
+    if (beat.read) {
+      add(beat.read, 'read');
+      highlightTalk(beat.read);
+    }
+    if (beat.cards) {
+      showOffers(beat.cards);
+      await wait(3200);
+    }
+    if (beat.cart) {
+      await wait(1400);
+      if (stopped) return;
+      fillCart([beat.cart], false);
+      await wait(4500);
+      await homeScenes();
+      return;
+    }
+  }
+}
+
+function openChat() {
+  chat.classList.add('on');
+  if (started) return;
+  started = true;
+  run();
+}
+function closeChat() { chat.classList.remove('on'); }
+
+document.getElementById('back').onclick = closeChat;
+document.getElementById('close-cart').onclick = () => cartWrap.classList.remove('on');
+document.getElementById('shade').onclick = () => cartWrap.classList.remove('on');
+document.getElementById('qv-close').onclick = closeQuickView;
+document.getElementById('qv-dismiss').onclick = closeQuickView;
+document.getElementById('qv-scrim').onclick = closeQuickView;
+fallback.onclick = openChat;
+document.getElementById('composer').onsubmit = (e) => e.preventDefault();
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeQuickView();
+});
+
+async function say(text) {
+  const typing = add('כותבת…', 'typing');
+  await wait(1600);
+  await gate();
+  typing.remove();
+  if (!stopped) {
+    add(text, 'ai');
+    highlightTalk(text);
+  }
+}
+
+let lastTalk = '';
+
+function mentionedIds(text) {
+  const ids = [];
+  if (text.includes('אוזנ')) ids.push('headphones');
+  if (text.includes('שעון')) ids.push('watch');
+  if (text.includes('מנור')) ids.push('lamp');
+  if (text.includes('משקפ')) ids.push('glasses');
+  return ids;
+}
+
+function highlightTalk(text) {
+  if (typeof text === 'string' && mentionedIds(text).length) lastTalk = text;
+  const ids = mentionedIds(lastTalk);
+  document.querySelectorAll('#offer-list .pcard').forEach((card) => {
+    card.classList.toggle('active', ids.includes(card.dataset.id));
+  });
+}
+
+function showOffers(ids) {
+  document.getElementById('offers-empty').hidden = true;
+  const list = document.getElementById('offer-list');
+  list.innerHTML = ids.map(cardHtml).join('');
+  bindCards(list);
+  highlightTalk();
+}
+
+async function showThreadCards(ids) {
+  showOffers(ids);
+  await wait(3400);
+}
+
+function siteDoc() {
+  try { return site.contentDocument; } catch (e) { return null; }
+}
+
+const SPARK = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M12 1.6l1.7 5.1 5.1 1.7-5.1 1.7L12 15.2l-1.7-5.1L5.2 8.4l5.1-1.7L12 1.6zm6.4 10.2.9 2.6 2.6.9-2.6.9-.9 2.6-.9-2.6-2.6-.9 2.6-.9.9-2.6z"/></svg>';
+const photoMap = [
+  ['אוזניות', 'ai-products/headphones.jpg'],
+  ['נעלי', 'ai-products/sneakers.jpg'],
+  ['שעון', 'ai-products/watch.jpg'],
+  ['מצלמה', 'ai-products/camera.jpg'],
+  ['תיק', 'ai-products/bag.jpg'],
+  ['מנורה', 'ai-products/lamp.jpg'],
+  ['מעיל', 'ai-products/jacket.jpg'],
+  ['טאבלט', 'ai-products/tablet.jpg'],
+  ['משקפי', 'ai-products/glasses.jpg']
+];
+
+function swapPhotos() {
+  const doc = siteDoc();
+  if (!doc) return;
+  doc.querySelectorAll('article').forEach((article) => {
+    const title = (article.querySelector('h3') || {}).textContent || '';
+    const hit = photoMap.find(([key]) => title.includes(key));
+    if (!hit) return;
+    article.querySelectorAll('img').forEach((img) => {
+      if (img.dataset.swapped === hit[1]) return;
+      img.src = hit[1];
+      img.srcset = hit[1];
+      img.dataset.swapped = hit[1];
+    });
+  });
+}
+
+async function press(el) {
+  if (!el) return;
+  el.classList.add('pulse');
+  await wait(2200);
+  el.classList.add('pressed');
+  await wait(700);
+  el.classList.remove('pulse');
+  el.classList.remove('pressed');
+}
+
+function decorateSite() {
+  const doc = siteDoc();
+  if (!doc) return;
+  swapPhotos();
+  if (!doc.getElementById('ai-mark-style')) {
+    const style = doc.createElement('style');
+    style.id = 'ai-mark-style';
+    style.textContent = '.ai-mark{position:absolute;z-index:6;bottom:12px;inset-inline-start:12px;width:36px;height:36px;padding:0;display:flex;align-items:center;justify-content:center;border:0;border-radius:999px;background:#26235c;color:#fff;cursor:pointer}.ai-mark.picked{box-shadow:0 0 0 4px #fff,0 0 0 7px #26235c}.ai-mark.pressed,.ai-saved.pressed{transform:scale(0.9)}.ai-saved{height:36px;margin-inline-end:8px;padding:0 12px;border-radius:999px;border:1px solid #26235c;background:#fff;color:#26235c;font-family:Rubik,Assistant,sans-serif;font-weight:600;cursor:pointer}.ai-saved.pulse,.ai-mark.pulse{box-shadow:0 0 0 6px rgba(38,35,92,.28)}';
+    doc.head.appendChild(style);
+  }
+  doc.querySelectorAll('article').forEach((article) => {
+    if (article.querySelector('.ai-mark')) return;
+    const shot = article.querySelector('.group') || article.querySelector('div');
+    if (!shot) return;
+    const btn = doc.createElement('button');
+    btn.type = 'button';
+    btn.className = 'ai-mark';
+    btn.setAttribute('aria-label', 'AI');
+    btn.innerHTML = SPARK;
+    btn.onclick = (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      const title = (article.querySelector('h3') || {}).textContent || '';
+      if (window.onProductMark) window.onProductMark(title, btn);
+    };
+    shot.appendChild(btn);
+  });
+  doc.querySelectorAll('button[aria-label="Favorites"]').forEach((fav) => {
+    if (fav.previousElementSibling && fav.previousElementSibling.classList.contains('ai-saved')) return;
+    const btn = doc.createElement('button');
+    btn.type = 'button';
+    btn.className = 'ai-saved';
+    btn.textContent = 'שאלי';
+    btn.onclick = (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      if (window.onSavedAsk) window.onSavedAsk();
+    };
+    fav.insertAdjacentElement('beforebegin', btn);
+  });
+}
+
+function scrollSiteToProducts() {
+  const doc = siteDoc();
+  if (!doc) return;
+  const card = [...doc.querySelectorAll('article')].find((a) => (a.textContent || '').includes('אוזניות'));
+  if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function markTitles(parts) {
+  const doc = siteDoc();
+  if (!doc) return;
+  doc.querySelectorAll('.ai-mark').forEach((btn) => btn.classList.remove('picked'));
+  parts.forEach((part) => {
+    const article = [...doc.querySelectorAll('article')].find((a) => (a.textContent || '').includes(part));
+    const btn = article && article.querySelector('.ai-mark');
+    if (btn) btn.classList.add('picked');
+  });
+}
+
+let marksOn = false;
+let scriptDone = false;
+let followup = false;
+
+async function askFromCart() {
+  if (followup || stopped) return;
+  followup = true;
+  cartWrap.classList.remove('on');
+  chat.classList.add('on');
+  add('מהעגלה · על מה שכבר בחרת', 'scene');
+  await typeAndSend('שמתי שלושה בעגלה. מה כדאי להשאיר?');
+  await say('שלושת אלה כבר בעגלה, בלי להקליד שמות. האוזניות 200₪, המנורה 170₪, והמשקפיים 150₪. הייתי משאירה את האוזניות כמתנה המרכזית, ואת המשקפיים אם נשאר מקום. המנורה הכי פחות דחופה.');
+  await showThreadCards(['headphones', 'lamp', 'glasses']);
+  followup = false;
+}
+
+async function askFromSaved() {
+  if (followup || stopped) return;
+  followup = true;
+  chat.classList.add('on');
+  add('מהשמורים · על מה שכבר סימנת', 'scene');
+  await typeAndSend('אלה השמורים שלי. מי מהם בתוך היתרה?');
+  await say('מהרשימה השמורה: המנורה 170₪ בתוך היתרה, המשקפיים 150₪ גם. לא צריך להעתיק את השמות לשיחה.');
+  await showThreadCards(['lamp', 'glasses']);
+  followup = false;
+}
+
+async function askFromMarks() {
+  if (followup || stopped) return;
+  followup = true;
+  chat.classList.add('on');
+  add('מהמוצרים על המסך', 'scene');
+  await typeAndSend('תשווי בין האוזניות לשעון שסימנתי');
+  await say('שניהם מהכרטיסים שסימנת עכשיו. השעון 380₪ וחורג מהיתרה, האוזניות 200₪ ובתוכה.');
+  await showThreadCards(['headphones', 'watch']);
+  await wait(3200);
+  chat.classList.remove('on');
+  followup = false;
+  scriptDone = true;
+}
+
+async function homeScenes() {
+  if (stopped) return;
+  cartWrap.classList.remove('on');
+  chat.classList.remove('on');
+  marksOn = true;
+  decorateSite();
+  scrollSiteToProducts();
+  await wait(2800);
+  fillCart(['headphones', 'lamp', 'glasses'], true);
+  await press(document.getElementById('ask-cart'));
+  await wait(600);
+  await askFromCart();
+  await wait(2800);
+  chat.classList.remove('on');
+  await wait(1800);
+  const saved = siteDoc()
+    ? [...siteDoc().querySelectorAll('.ai-saved')].filter((el) => el.getBoundingClientRect().width > 0)
+    : [];
+  for (const el of saved) await press(el);
+  await wait(600);
+  await askFromSaved();
+  await wait(2800);
+  chat.classList.remove('on');
+  scrollSiteToProducts();
+  await wait(1600);
+  markTitles(['אוזניות', 'שעון']);
+  const picked = siteDoc() ? [...siteDoc().querySelectorAll('.ai-mark.picked')] : [];
+  for (const el of picked) await press(el);
+  markTitles(['אוזניות', 'שעון']);
+  await wait(900);
+  await askFromMarks();
+}
+
+window.homeScenes = homeScenes;
+window.onProductMark = (title) => {
+  if (!scriptDone || followup) return;
+  const id = title.includes('אוזניות') ? 'headphones'
+    : title.includes('שעון') ? 'watch'
+    : title.includes('מנורה') ? 'lamp'
+    : title.includes('משקפי') ? 'glasses' : null;
+  if (!id) return;
+  followup = true;
+  chat.classList.add('on');
+  add('מהמוצר שעל המסך', 'scene');
+  typeAndSend('ספרי לי על ' + products[id].name).then(() => say(products[id].detail).then(() => { followup = false; }));
+};
+window.onSavedAsk = () => { if (scriptDone) askFromSaved(); };
+
+document.getElementById('ask-cart').onclick = () => { if (scriptDone) askFromCart(); };
+
+function mountButton() {
+  let doc;
+  try { doc = site.contentDocument; } catch (e) { return; }
+  if (!doc || !doc.body) { fallback.style.display = 'block'; return; }
+  const carts = [...doc.querySelectorAll('button[aria-label="Cart"]')];
+  if (!carts.length) { fallback.style.display = 'block'; return; }
+  fallback.style.display = 'none';
+  carts.forEach((cart, i) => {
+    const id = 'ai-mode-btn-' + i;
+    if (doc.getElementById(id)) return;
+    const btn = doc.createElement('button');
+    btn.id = id;
+    btn.type = 'button';
+    btn.textContent = 'AI Mode';
+    btn.style.cssText = 'height:40px;padding:0 14px;border-radius:999px;border:1px solid #26235c;background:#fff;color:#26235c;font-family:Rubik,Assistant,sans-serif;font-weight:500;cursor:pointer;';
+    btn.onclick = (ev) => { ev.preventDefault(); ev.stopPropagation(); openChat(); };
+    cart.insertAdjacentElement('beforebegin', btn);
+  });
+}
+
+const CATEGORY_ICONS = {
+  'הכל': 'all-icon.svg',
+  'אלקטרוניקה': 'gadgets-icon.svg',
+  'בית': 'home-decor-icon.svg',
+  'אופנה': 'bag-icon.svg',
+  'ספורט': 'sport-icon.svg',
+  'מטבח': 'kitchen-icon.svg',
+  'ילדים': 'kids-icon.svg',
+  "גאדג'טים": 'home-appliance-icon.svg'
+};
+
+const HEADER_TEXT = {
+  'שלום,': 'ברוכה הבאה,',
+  'D': 'ד',
+  'Dana': 'דנה',
+  'Your Credit Balance:': 'יתרת הקרדיט שלך:',
+  '$300': '300 ₪',
+  'remaining': 'נותרו',
+  '$700': '700 ₪',
+  'used': 'נוצלו',
+  'of': 'מתוך',
+  '$1,000': '1,000 ₪'
+};
+
+function fixSiteChrome() {
+  const doc = siteDoc();
+  if (!doc) return;
+  const header = doc.querySelector('header');
+  if (header) {
+    header.style.width = '100%';
+    header.style.maxWidth = '100%';
+    const logo = header.querySelector('img');
+    if (logo && !String(logo.getAttribute('src') || '').includes('logo.svg')) {
+      logo.setAttribute('src', 'logo.svg');
+      logo.setAttribute('srcset', 'logo.svg');
+      logo.alt = 'Nicklas';
+    }
+    const walker = doc.createTreeWalker(header, NodeFilter.SHOW_TEXT);
+    const nodes = [];
+    while (walker.nextNode()) nodes.push(walker.currentNode);
+    nodes.forEach((node) => {
+      const next = HEADER_TEXT[node.nodeValue.trim()];
+      if (next) node.nodeValue = node.nodeValue.replace(node.nodeValue.trim(), next);
+    });
+  }
+  const hero = doc.querySelector('section');
+  if (hero) {
+    const bg = hero.querySelector('img');
+    if (bg && !String(bg.getAttribute('src') || '').includes('hero-gifts.jpg')) {
+      bg.setAttribute('src', 'hero-gifts.jpg');
+      bg.removeAttribute('srcset');
+      bg.alt = '';
+      bg.style.transform = 'scaleX(-1)';
+      bg.style.objectFit = 'cover';
+    }
+  }
+  doc.querySelectorAll('img[alt="Acme Corp"]').forEach((img) => {
+    img.setAttribute('src', 'nicklas-logo.svg');
+    img.removeAttribute('srcset');
+    img.alt = 'Nicklas';
+  });
+  doc.querySelectorAll('button').forEach((btn) => {
+    const label = (btn.innerText || '').trim();
+    const src = CATEGORY_ICONS[label];
+    if (!src) return;
+    const slot = btn.querySelector('span span');
+    if (!slot || slot.querySelector('img')) return;
+    slot.innerHTML = '<img alt="" src="' + src + '" width="32" height="32" style="width:32px;height:32px;object-fit:contain">';
+  });
+}
+
+mountButton();
+site.addEventListener('load', () => { mountButton(); fixSiteChrome(); if (marksOn) decorateSite(); });
+setInterval(() => { mountButton(); fixSiteChrome(); swapPhotos(); if (marksOn) decorateSite(); }, 800);
+</script>
+</body>
+</html>
